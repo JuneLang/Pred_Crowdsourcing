@@ -28,7 +28,7 @@ class AggMap:
         self.total = 0
         self.aggMap = collections.defaultdict(int)
 
-    @property
+    # @property
     def __repr__(self):
         return str(self.total) + str(self.aggMap)
 
@@ -60,7 +60,7 @@ class Consensus(object):
 
         # Maps the labels to the translation tables and dictionaries they will
         # need
-        # self.labelMap = self.getLabelMap()
+        self.labelMap = None
         # Labels to find a consensus for
         # self.labels = labelMap.keys()
         self.labels = self.getLabels()
@@ -167,6 +167,11 @@ class Consensus(object):
     def readInputJson(self, input_json):
         js = open(input_json)
         ij = json.load(js)
+        print('*********************')
+        for page in ij["subjects"]:
+            for assertion in page["assertions"]:
+                print(assertion["data"])
+        print('*********************')
         return ij
 
     """
@@ -211,24 +216,30 @@ class Consensus(object):
     def _getSortedAttrsForLabel(self, attrSets, label):
         sortedAttrs = []
         for attrset in attrSets:
-            sortedAttrs = [attrSet[label] for attrSet in attrset["versions"]]
-
+            if attrset["name"] == label:
+                if attrset["versions"]:
+                    for version in attrset["versions"]:  # 找到该label对应的所有值
+                        for i in range(version["votes"]):
+                            sortedAttrs.append(version["data"])
+            # sortedAttrs = [attrSet[label] for attrSet in attrset["versions"]]
+        print(sortedAttrs)
         # Normalize any default responses
         sortedAttrsTemp = []
         for attr in sortedAttrs:
-            normalized = self.clean(attr)
-            # Apply all lossless functions for this attribute
-            if self.useFunctionNormalizer:
-                losslessFuncs = self.labelMap[label].funcs
-                for func in losslessFuncs:
-                    normalized = getattr(self, func)(normalized)
+            for key in attr:
+                normalized = self.clean(attr[key])
+                # Apply all lossless functions for this attribute
+                if self.useFunctionNormalizer and False:  # - TODO
+                    losslessFuncs = self.labelMap[label].funcs
+                    for func in losslessFuncs:
+                        normalized = getattr(self, func)(normalized)
 
-            # Apply all lossless translation tables for this attribute
-            if self.useTranslationNormalizer:
-                normalized = self.translateString(label, normalized)
-
-            if attr != normalized and (self.useFunctionNormalizer or self.useTranslationNormalizer):
-                self.normalizedFileWriter.writerow(["orig:", attr])
+                # Apply all lossless translation tables for this attribute
+                if self.useTranslationNormalizer:
+                    normalized = self.translateString(label, normalized)
+            # if attr[key] != normalized and (self.useFunctionNormalizer or self.useTranslationNormalizer):
+            if attr[key] != normalized or (self.useFunctionNormalizer or self.useTranslationNormalizer):
+                self.normalizedFileWriter.writerow(["orig:" + key, attr[key]])
                 self.normalizedFileWriter.writerow(["norm:", normalized])
                 self.normalizedFile.flush()
 
@@ -237,7 +248,6 @@ class Consensus(object):
 
         # Copy back the normalized version
         sortedAttrs = sortedAttrsTemp
-
         # Sort attributes in order of descending length
         sortedAttrs.sort(key=len, reverse=True)
 
@@ -321,8 +331,9 @@ class Consensus(object):
         currMax = -1
         majorEntry = []
         for group in majorGroup:
-            unsortKeys = group.keys()
-            unsortKeys.sort(key = lambda s: -len(s))
+            # unsortKeys = group.keys()
+            # unsortKeys.sort(key=lambda s: -len(s))
+            unsortKeys = sorted(group, key=lambda s: -len(s))
             for key in unsortKeys:
                 if group[key] == currMax:
                     majorEntry.append(key)
@@ -437,7 +448,6 @@ class Consensus(object):
         # This number represents the smallest number of votes a label had above
         # the majority
         minVotesNeededToKeepMajority = len(attrSets)
-
         # Iterate over the labels to to find a consensus per label
         for label in self.labels:
             # Indicates if lossy normalizer is used for a particular label
@@ -487,7 +497,7 @@ class Consensus(object):
 
                 votesForMajority = floor(0.5 * totalVotes) + 1
 
-                if (totalVotes > 1):
+                if (totalVotes > 0):  # - TODO original: 1
                     # It only makes sense to calsulate ratio if there is more
                     # than 1 worker's answer
                     if self.top2:
@@ -816,8 +826,8 @@ class Consensus(object):
 
 
 def main():
-    getConsensus = Consensus('emigrant/5637a1a03262330003ce1c00.json')
-    getConsensus.setOutputFolder('Result')
+    getConsensus = Consensus('emigrant/5637a1a03262330003e01c00.json')
+    getConsensus.setOutputFolder('Result10')
     getConsensus.calculateConsensus()
 
 if __name__ == "__main__":
