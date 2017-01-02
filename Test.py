@@ -510,8 +510,9 @@ class Consensus(object):
                 else:
                     ratio = 0
 
+                ration2 = votesForMajority/totalVotes
                 # A label that reached majority will be processed here only.
-                if ratio > 0.5:
+                if ratio > 0.5 and ration2>= 1:
                     consensusFound = True
 
                     # Format grouping row
@@ -826,8 +827,8 @@ class Consensus(object):
 
 
 def main():
-    getConsensus = Consensus('emigrant/5637a1a03262330003e01c00.json')
-    getConsensus.setOutputFolder('Result10')
+    getConsensus = Consensus('emigrant/5637a1a03262330003de1c00.json')
+    getConsensus.setOutputFolder('Res10')
     getConsensus.calculateConsensus()
 
 if __name__ == "__main__":
