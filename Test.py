@@ -1,4 +1,5 @@
 # test codes
+from Label import Label
 import json
 from difflib import ndiff
 from math import floor
@@ -38,7 +39,7 @@ class Consensus(object):
         # Indicates if output is verbose for debugging
         self.debug = False
 
-        # Input csv file
+        # Input json file
         self.inputJson = self.readInputJson(inputFile)
         # Label that consensus entries are grouped by
         self.keyLabel = self.getKeyLabel()
@@ -158,6 +159,8 @@ class Consensus(object):
         self.plssRegexWSub = re.compile(patternWSub, flags=re.IGNORECASE)
         self.plssReplaceWSub = '\\g<sub> ' + self.plssReplace
 
+
+
     """
         Sets the output folder.
     """
@@ -170,7 +173,7 @@ class Consensus(object):
 
         # TODO : delete
         #print(len(ij["subjects"]))
-        ij["subjects"] = [subject for i,subject in enumerate(ij["subjects"]) if i < 10000]
+        #ij["subjects"] = [subject for i,subject in enumerate(ij["subjects"]) if i < 10000]
         #ij["subjects"][0]["assertions"] = [elmt for i,elmt in enumerate(ij["subjects"][0]["assertions"]) if i < 100]
         # end TODO
 
@@ -377,7 +380,9 @@ class Consensus(object):
         labels = []
         for subject in self.inputJson["subjects"]:
             for assertion in subject["assertions"]:
-                labels.append(assertion["name"])
+                # labels.append(assertion["name"])
+                l = Label(assertion)
+                labels.append(l)
         return labels
 
     def getKeyLabel(self):
@@ -719,6 +724,7 @@ class Consensus(object):
         workerNeedFile = open(os.path.join(self.outputFolder, self.workerNeedFileName), 'w')
         workerNeedFileWriter = csv.writer(workerNeedFile, dialect='excel')
 
+        output_json = {}
         print("Creating file attribute map...")
 
         # Create the file attribute map
@@ -729,11 +735,13 @@ class Consensus(object):
         # Values are data from the row being read
         #for row in csvInputFileReader:
         #    fileMap[row[self.keyLabel]].append(row)
-        for index,subject in enumerate(self.inputJson["subjects"]):
-            if index % 10 == 0:
-                print("did "+str(index)+" pages")
-            for assertion in subject["assertions"]:
-                fileMap[subject["id"]].append(assertion)
+        # for index,subject in enumerate(self.inputJson["subjects"]):
+        #     if index % 10 == 0:
+        #         print("did "+str(index)+" pages")
+        #     for assertion in subject["assertions"]:
+        #         fileMap[subject["id"]].append(assertion)
+        output_json["subjects"].append(self.keyLabel)
+
 
         # Write output file headers
         groupingFileWriter.writerow(self.getGroupingHeader())
@@ -873,8 +881,8 @@ def main():
     json.dump(json_collection,file_to_write)
     file_to_write.close()
     print('ok');"""
-    getConsensus = Consensus('emigrant/jc.json')
-    getConsensus.setOutputFolder('resTotal9')
+    getConsensus = Consensus('emigrant/5637a1a03262330003ce1c00.json')
+    getConsensus.setOutputFolder('resTotal')
     getConsensus.calculateConsensus()
     print()
 
