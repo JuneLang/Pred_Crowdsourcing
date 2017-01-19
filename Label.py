@@ -7,6 +7,7 @@ class Label(object):
         self._name = properties["name"]
         self._data = properties["data"]
         self._versions = properties["versions"]  # versions of translations of users
+        self._normalized_versions = {}
 
     @property
     def status(self):
@@ -32,3 +33,10 @@ class Label(object):
     def versions(self, v):
         self._versions = v
 
+    @property
+    def normalized_versions(self):
+        return self._normalized_versions
+
+    @normalized_versions.setter
+    def normalized_versions(self, v):
+        self._normalized_versions = v

@@ -224,21 +224,17 @@ class Consensus(object):
             normalized = ' '.join(parts)
         return normalized
 
-    def _getSortedAttrsForLabel(self, attrSets, label):
-        sortedAttrs = []
-        for attrset in attrSets:
-            if attrset["name"] == label:
-                if attrset["versions"]:
-                    for version in attrset["versions"]:  # 找到该label对应的所有值
-                        for i in range(version["votes"]):
-                            sortedAttrs.append(version["data"])
-            # sortedAttrs = [attrSet[label] for attrSet in attrset["versions"]]
-        #print(sortedAttrs)
+    def _getSortedAttrsForLabel(self, label):
+        # sortedAttrs = []
+        # if label.versions:
+        #     for version in label.versions:
+        #         for i in range(version["votes"]):
+
         # Normalize any default responses
-        sortedAttrsTemp = []
-        for attr in sortedAttrs:
-            for key in attr:
-                normalized = self.clean(attr[key])
+        sortedAttrsTemp = {}
+        if label.versions:
+            for version in label.versions:
+                normalized = self.clean(version["data"]["value"])
                 # Apply all lossless functions for this attribute
                 if self.useFunctionNormalizer and False:  # - TODO
                     losslessFuncs = self.labelMap[label].funcs
@@ -248,28 +244,28 @@ class Consensus(object):
                 # Apply all lossless translation tables for this attribute
                 if self.useTranslationNormalizer:
                     normalized = self.translateString(label, normalized)
-            # if attr[key] != normalized and (self.useFunctionNormalizer or self.useTranslationNormalizer):
-            if attr[key] != normalized or (self.useFunctionNormalizer or self.useTranslationNormalizer):
-                self.normalizedFileWriter.writerow(["orig:" + key, attr[key]])
-                self.normalizedFileWriter.writerow(["norm:", normalized])
-                self.normalizedFile.flush()
+                # if attr[key] != normalized and (self.useFunctionNormalizer or self.useTranslationNormalizer):
+                if version["data"] != normalized or (self.useFunctionNormalizer or self.useTranslationNormalizer):
+                    self.normalizedFileWriter.writerow(["orig:", version["data"]["value"]])
+                    self.normalizedFileWriter.writerow(["norm:", normalized])
+                    self.normalizedFile.flush()
 
-            # Using the cleaned version of the data
-            sortedAttrsTemp.append(normalized)
+                # Using the cleaned version of the data
+                sortedAttrsTemp[version["data"]["value"]] = normalized
 
         # Copy back the normalized version
         sortedAttrs = sortedAttrsTemp
         # Sort attributes in order of descending length
-        sortedAttrs.sort(key=len, reverse=True)
-
+        # sortedAttrs = sorted(sortedAttrsTemp, key=len, reverse=True)
+        label.normalized_versions = sortedAttrs
         # Create a copy of the original attributes to use when determining
         # whether to add more or less workers to a task. Each attribute
         # will also be match with is corresponding original indice in attrSets
         indices = range(len(sortedAttrs))
-        sortedAttrsCopy = sortedAttrs[:]
+        sortedAttrsCopy = sortedAttrs
         sortedAttrsCopy = zip(sortedAttrsCopy, indices)
 
-        return sortedAttrs, sortedAttrsCopy
+        return sortedAttrsCopy
 
     """
         List of grouped words and their cumulative frequencies. In the
@@ -282,37 +278,45 @@ class Consensus(object):
         If useLossyNormalizers = True, then lossy normalizers will be used as
         well in the comparision. Else, only lossless normalizers will be used.
     """
-    def _buildFrequencyList(self, sortedAttrs, useLossyNormalizers):
+    def _buildFrequencyList(self, label, useLossyNormalizers):
         freqList = []
         # Loop over each attribute to try to put it in a group
-        for sortedAttr in sortedAttrs:
+        for original, normalized in label.normalized_versions.items():
             attrFound = False
             # Look over all groups 第一次循环没有freqlist为空，所以直接添加第一个attr
             for group in freqList:
                 for key in group.aggMap.keys():
                     # Insert exactly
-                    if self.comparator(key, sortedAttr):
-                        group.aggMap[key] += 1
-                        group.total += 1
-                        attrFound = True
+                    if self.comparator(key, normalized):
+                        for version in label.versions:
+                            if version["data"]["value"] == original:
+                                group.aggMap[key] += version["votes"]
+                                group.total += version["votes"]
+                                attrFound = True
+                                break
                         break
                     # Try approximate match needed
                     if useLossyNormalizers:
                         s1 = self.lossyClean(key)
-                        s2 = self.lossyClean(sortedAttr)
-                        if (self.approx(s1, s2) or self.comparator(s1, s2)):
-                            group.aggMap[sortedAttr] += 1
-                            group.aggMap[key] += 1
-                            group.total += 1
-                            attrFound = True
+                        s2 = self.lossyClean(normalized)
+                        if self.approx(s1, s2) or self.comparator(s1, s2):
+                            for version in label.versions:
+                                if version["data"]["value"] == original:
+                                    group.aggMap[normalized] += version["votes"]
+                                    group.aggMap[key] += version["votes"]
+                                    group.total += version["votes"]
+                                    attrFound = True
+                                    break
                             break
                 if attrFound:
                     break
             # If no exact or approximate matches, create a new entry
             if not attrFound:
                 newEntry = AggMap()
-                newEntry.aggMap[sortedAttr] += 1
-                newEntry.total += 1
+                for version in label.versions:
+                    if version["data"]["value"] == original:
+                        newEntry.aggMap[normalized] += version["votes"]
+                        newEntry.total += version["votes"]
                 freqList.append(newEntry)
         return freqList
 
@@ -480,7 +484,7 @@ class Consensus(object):
 
                 # Get the sorted attributes for this label from the original
                 # attribute set
-                sortedAttrs, sortedAttrsCopy = self._getSortedAttrsForLabel(attrSets, label)
+                sortedAttrsCopy = self._getSortedAttrsForLabel(label)
 
                 # Two iterations to find consensus: the first without the lossy
                 # normalizers and the second with the lossy normalizers. All labels
@@ -502,7 +506,7 @@ class Consensus(object):
                     # words will be located in the same group.
                     # group.total = cumulative weight of this group
                     # group.aggMap = dictionary of key to weight
-                    freqList = self._buildFrequencyList(sortedAttrs, useLossyNormalizers)
+                    freqList = self._buildFrequencyList(label, useLossyNormalizers)
 
                     # Get the majority entry(ies), the votes for that entry(ies),
                     # as well the entries that voted for the majority entry(ies).
@@ -735,13 +739,14 @@ class Consensus(object):
         # Values are data from the row being read
         #for row in csvInputFileReader:
         #    fileMap[row[self.keyLabel]].append(row)
-        # for index,subject in enumerate(self.inputJson["subjects"]):
-        #     if index % 10 == 0:
-        #         print("did "+str(index)+" pages")
-        #     for assertion in subject["assertions"]:
-        #         fileMap[subject["id"]].append(assertion)
-        output_json["subjects"].append(self.keyLabel)
+        for index, subject in enumerate(self.inputJson["subjects"]):
+            if index % 10 == 0:
+                print("did "+str(index)+" pages")
+            for assertion in subject["assertions"]:
+                fileMap[subject["id"]].append(assertion)
 
+        output_json["subjects"] = []
+        output_json["subjects"].append(self.keyLabel)
 
         # Write output file headers
         groupingFileWriter.writerow(self.getGroupingHeader())
@@ -759,12 +764,12 @@ class Consensus(object):
         numRowsProcessed = 0
         totalWithoutFullConsensus = 0
         startTime = time.time()
-        for key in sorted(fileMap.keys()):
+        for key in sorted(fileMap.keys()):  # for key in sorted(output_json["subjects"]):  #
             if self.getMinWorker:
                 majorityRow = None
                 minW = 0
-                for i in range(1, len(fileMap[key]) + 1):
-                    majorityRow, groupingRow, consensusRow, workerNeedRow = self.getConsensus(key, fileMap[key][:i])
+                for i in range(1, len(self.labels) + 1):
+                    majorityRow, groupingRow, consensusRow, workerNeedRow = self.getConsensus(key, self.labels)  #not determine de page yet
                     minW = i
                     if (majorityRow[-1] == 'ok'):
                         break
