@@ -1,8 +1,18 @@
+class AAA():
+    def __init__(self):
+        return
 
-lst = "a b c d e f g h i j k l m n".split(' ')
-# for i in range(len(lst) + 1):
-#     print(lst[:i])
-# # print(lst)
+a = AAA()
+a.t = 1
 
-d = {"a": 1, "b": 2}
+b = AAA()
+b.t = 2
 
+c = AAA()
+c.t = 3
+
+list = [c,b,a]
+
+list.sort(key=lambda x: x.t)
+
+print(list)
