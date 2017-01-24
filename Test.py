@@ -451,33 +451,6 @@ class Consensus(object):
         return row
 
     def getConsensus(self, fileKey, attrSets):
-        # The majority statistics, grouping, and consensus rows to be returned
-        # majorityRow = [fileKey]
-        # groupingRow = [fileKey]
-        # consensusRow = [fileKey]
-        # The worker need row to be returned
-        workerNeedRow = None
-
-        # For the workerNeedRow
-        # The total number of labels that have achieved consensus
-        totalOk = 0
-        # The set of entries that can be ignored (removed from the input) and
-        # have this task still reach an overall consensus
-        entriesNotUsedForMajority = set(i for i in range(len(attrSets)))
-        # The max number of votes a label is lacking to achieve consensus
-        # (ex if 4 votes were received and 7 were needed,
-        # maxVotesNeededForMajority = max(3, maxVotesNeededForMajority)
-        maxVotesNeededForMajority = 0
-        # This represents the set of tasks that all entries had in common that
-        # contributed to the majority. A subset of the intersection of
-        # entriesUsedForMajority and entriesNotUsedForMajority that is at most
-        # size minVotesNeededToKeepMajority can be removed for the tasks
-        # without affecting the results
-        entriesUsedForMajority = set(i for i in range(len(attrSets)))
-        # This number represents the smallest number of votes a label had above
-        # the majority
-        minVotesNeededToKeepMajority = len(attrSets)
-
 
         with open(os.path.join(self.outputFolder, 'ConsensusCount.txt'),'w') as output:
             consensusCount = 0
@@ -686,19 +659,6 @@ class Consensus(object):
         if not os.path.exists(self.outputFolder):
             os.makedirs(self.outputFolder)
 
-        # Set up output files
-        groupingFile = open(os.path.join(self.outputFolder, self.groupingFileName), 'w')
-        groupingFileWriter = csv.writer(groupingFile, dialect='excel')
-        majorityFile = open(os.path.join(self.outputFolder, self.majorityFileName), 'w')
-        majorityFileWriter = csv.writer(majorityFile, dialect='excel')
-        consensusFile = open(os.path.join(self.outputFolder, self.consensusFileName), 'w')
-        consensusFileWriter = csv.writer(consensusFile, dialect='excel')
-        self.normalizedFile = open(os.path.join(self.outputFolder, self.normalizedFileName), 'w')
-        self.normalizedFileWriter = csv.writer(self.normalizedFile, dialect='excel')
-        # Output for tasks that did not reach a majority considering all fields
-        workerNeedFile = open(os.path.join(self.outputFolder, self.workerNeedFileName), 'w')
-        workerNeedFileWriter = csv.writer(workerNeedFile, dialect='excel')
-
         print("Creating file attribute map...")
 
         # Create the file attribute map
@@ -710,8 +670,8 @@ class Consensus(object):
         #for row in csvInputFileReader:
         #    fileMap[row[self.keyLabel]].append(row)
         for index, subject in enumerate(self.inputJson["subjects"]):
-            if index % 10 == 0:
-                print("did "+str(index)+" pages")  # not right
+            # if index % 10 == 0:
+            #     print("did "+str(index)+" pages")  # not right
             for assertion in subject["assertions"]:
                 fileMap[subject["id"]].append(assertion)
 
