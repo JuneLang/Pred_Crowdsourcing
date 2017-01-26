@@ -62,9 +62,9 @@ class Label(object):
         json["status"] = self.status
         json["name"] = self._name
         json["data"] = self.data
-
-        for version in self.versions:
-            if version["data"].get("value"):
-                version["normalized"] = self.normalized_versions[version["data"]["value"]]
+        if self.versions:
+            for version in self.versions:
+                if version["data"].get("value"):
+                    version["normalized"] = self.normalized_versions[version["data"]["value"]]
         json["versions"] = self.versions
         return json

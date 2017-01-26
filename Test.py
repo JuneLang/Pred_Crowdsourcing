@@ -40,13 +40,13 @@ class Consensus(object):
         self.debug = False
 
         # Input json file
-        self._inputJson = self.read_inputJson(inputFile)
+        self.input_json = self.read_inputJson(inputFile)
 
         # Output json; initialize by copy the input
-        self._outputJson = self.inputJson
+        self.output_pages = []
 
         # Label that consensus entries are grouped by
-        self.keyLabel = self.getKeyLabel()
+        # self.keyLabel = self.getKeyLabel()
         # Output folder
         self.outputFolder = None
         # Indicates if lossless custom functions are to be used for normalizing data
@@ -68,26 +68,7 @@ class Consensus(object):
         self.labelMap = None
         # Labels to find a consensus for
         # self.labels = labelMap.keys()
-        self.labels = self.getLabels()
-
-        # Output file names - TODO allow configuration?
-        # File that shows the grouping of words
-        self.groupingFileName = 'Grouping.csv'
-        # Shows which value was chosen if a consensus was reached
-        self.majorityFileName = 'Majority.csv'
-        # Final consensus response achieved
-        self.consensusFileName = 'Consensus.csv'
-        # Shows which tasks did not achieve consensus when considering all the
-        # fields in the row. Also determines if that tasks could have achieved
-        # consensus with more or less workers.
-        self.workerNeedFileName = 'WorkerNeed.csv'
-        # Stores all changes performed to the original data by lossless transformations
-        self.normalizedFileName = 'Normalized.csv'
-        self.normalizedFile = None
-        self.normalizedFileWriter = None
-
-        # Diff output file name
-        self.diffOutputFileName = 'Diff.txt'
+        self.labels_by_page = self.get_labels_by_page()
 
         # The current translation table
         self.translationTable = None
@@ -171,9 +152,9 @@ class Consensus(object):
     def setOutputFolder(self, outputFolder):
         self.outputFolder = outputFolder
 
-    @property
-    def inputJson(self):
-        return self._inputJson
+    # @property
+    # def inputJson(self):
+    #     return self._inputJson
 
     def read_inputJson(self, input_json):
         js = open(input_json)
@@ -254,10 +235,10 @@ class Consensus(object):
                     if self.useTranslationNormalizer:
                         normalized = self.translateString(label, normalized)
                     # if attr[key] != normalized and (self.useFunctionNormalizer or self.useTranslationNormalizer):
-                    if version["data"] != normalized or (self.useFunctionNormalizer or self.useTranslationNormalizer):
-                        self.normalizedFileWriter.writerow(["orig:", version["data"]["value"]])
-                        self.normalizedFileWriter.writerow(["norm:", normalized])
-                        self.normalizedFile.flush()
+                    # if version["data"] != normalized or (self.useFunctionNormalizer or self.useTranslationNormalizer):
+                    #     self.normalizedFileWriter.writerow(["orig:", version["data"]["value"]])
+                    #     self.normalizedFileWriter.writerow(["norm:", normalized])
+                    #     self.normalizedFile.flush()
 
                     # Using the cleaned version of the data
                     sortedAttrsTemp[version["data"]["value"]] = normalized
@@ -298,11 +279,12 @@ class Consensus(object):
                     # Insert exactly
                     if self.comparator(key, normalized):
                         for version in label.versions:
-                            if version["data"]["value"] == original:
-                                group.aggMap[key] += version["votes"]
-                                group.total += version["votes"]
-                                attrFound = True
-                                break
+                            if version["data"].get("value"):
+                                if version["data"]["value"] == original:
+                                    group.aggMap[key] += version["votes"]
+                                    group.total += version["votes"]
+                                    attrFound = True
+                                    break
                         break
                     # Try approximate match needed
                     if useLossyNormalizers:
@@ -323,9 +305,10 @@ class Consensus(object):
             if not attrFound:
                 newEntry = AggMap()
                 for version in label.versions:
-                    if version["data"]["value"] == original:
-                        newEntry.aggMap[normalized] += version["votes"]
-                        newEntry.total += version["votes"]
+                    if version["data"].get("value"):
+                        if version["data"]["value"] == original:
+                            newEntry.aggMap[normalized] += version["votes"]
+                            newEntry.total += version["votes"]
                 freqList.append(newEntry)
         return freqList
 
@@ -392,211 +375,213 @@ class Consensus(object):
             ret.append(t)
         return ret
 
-    def getLabels(self):
-        labels = []
-        for subject in self.inputJson["subjects"]:
+    def get_labels_by_page(self):
+        labels_by_page = []
+        for subject in self.input_json["subjects"]:
+            sb = {"id": subject["id"], "assertions": []}
             for assertion in subject["assertions"]:
                 # labels.append(assertion["name"])
                 l = Label(assertion)
-                labels.append(l)
-        return labels
+                # self.output_pages.append(sb)
+                sb["assertions"].append(l)
+            labels_by_page.append(sb)
+        return labels_by_page
 
-    def getKeyLabel(self):
-        kl = []
-        for subject in self.inputJson["subjects"]:
-            kl.append(subject["id"])
-        return kl
+    # def getKeyLabel(self):
+    #     kl = []
+    #     for subject in self.inputJson["subjects"]:
+    #         kl.append(subject["id"])
+    #     return kl
+    #
+    # """
+    #     Returns the grouping file header.
+    # """
+    # def getGroupingHeader(self):
+    #     row = [self.keyLabel]
+    #     for label in self.labels:
+    #         row.append(label)
+    #     return row
+    #
+    # """
+    #     Returns the consensus file header.
+    # """
+    # def getConsensusHeader(self):
+    #     row = [self.keyLabel]
+    #     for label in self.labels:
+    #         row.append(label)
+    #     return row
+    #
+    # """
+    #     Returns the majority file header.
+    # """
+    # def getMajorHeader(self):
+    #     row = [self.keyLabel]
+    #     for label in self.labels:
+    #         row.append(label)
+    #         # Options for the label's consensus
+    #         row.append('Options')
+    #         # The max vote for workers within the label
+    #         row.append('Max')
+    #         # The total number of votes
+    #         row.append('Out of')
+    #         # Max / Total
+    #         row.append('Ratio')
+    #         # 'ok' if the label reached a majority
+    #         row.append('Majority')
+    #         # Lossy or lossless
+    #         row.append('Algorithm Type')
+    #         # Consensus response type (real / blank) if consensus is reached
+    #         row.append('Consensus Response Type')
+    #     # 'ok' if all the labels for the task reached consensus
+    #     row.append("Complete Consensus")
+    #     return row
 
-    """
-        Returns the grouping file header.
-    """
-    def getGroupingHeader(self):
-        row = [self.keyLabel]
-        for label in self.labels:
-            row.append(label)
-        return row
+    def getConsensus(self, page):
 
-    """
-        Returns the consensus file header.
-    """
-    def getConsensusHeader(self):
-        row = [self.keyLabel]
-        for label in self.labels:
-            row.append(label)
-        return row
 
-    """
-        Returns the majority file header.
-    """
-    def getMajorHeader(self):
-        row = [self.keyLabel]
-        for label in self.labels:
-            row.append(label)
-            # Options for the label's consensus
-            row.append('Options')
-            # The max vote for workers within the label
-            row.append('Max')
-            # The total number of votes
-            row.append('Out of')
-            # Max / Total
-            row.append('Ratio')
-            # 'ok' if the label reached a majority
-            row.append('Majority')
-            # Lossy or lossless
-            row.append('Algorithm Type')
-            # Consensus response type (real / blank) if consensus is reached
-            row.append('Consensus Response Type')
-        # 'ok' if all the labels for the task reached consensus
-        row.append("Complete Consensus")
-        return row
+        consensusCount = 0
 
-    def getConsensus(self, fileKey, attrSets):
+        # Iterate over the labels to to find a consensus per label
+        for label in page["assertions"]:
 
-        with open(os.path.join(self.outputFolder, 'ConsensusCount.txt'),'w') as output:
-            consensusCount = 0
+            # Indicates if lossy normalizer is used for a particular label
+            useLossyNormalizers = False
+            # Indicates if consensus is reached for a particular label
+            consensusFound = False
 
-            # Iterate over the labels to to find a consensus per label
-            for label in self.labels:
+            # Get the sorted attributes for this label from the original
+            # attribute set
+            sortedAttrsCopy = self._getSortedAttrsForLabel(label)
 
-                # Indicates if lossy normalizer is used for a particular label
-                useLossyNormalizers = False
-                # Indicates if consensus is reached for a particular label
-                consensusFound = False
+            # Two iterations to find consensus: the first without the lossy
+            # normalizers and the second with the lossy normalizers. All labels
+            # will go through the first iteration, but only those that do not reach
+            # consensus in the first iteration will move to the second iteration.
+            for consensusIteration in range(2):
+                # Break early if we found a consensus the first found (using
+                # lossless normalizers)
+                if consensusFound:
+                    break
 
-                # Get the sorted attributes for this label from the original
-                # attribute set
-                sortedAttrsCopy = self._getSortedAttrsForLabel(label)
+                # Use lossy normalizers during the second iteration
+                if consensusIteration == 1:
+                    useLossyNormalizers = True
 
-                # Two iterations to find consensus: the first without the lossy
-                # normalizers and the second with the lossy normalizers. All labels
-                # will go through the first iteration, but only those that do not reach
-                # consensus in the first iteration will move to the second iteration.
-                for consensusIteration in range(2):
-                    # Break early if we found a consensus the first found (using
-                    # lossless normalizers)
-                    if consensusFound:
-                        break
+                # List of grouped words and their cumulative frequencies. In the
+                # end, the group with the largest cumulative frequency will have
+                # the majority selected from it. The idea is that only similar
+                # words will be located in the same group.
+                # group.total = cumulative weight of this group
+                # group.aggMap = dictionary of key to weight
+                freqList = self._buildFrequencyList(label, useLossyNormalizers)
 
-                    # Use lossy normalizers during the second iteration
-                    if consensusIteration == 1:
-                        useLossyNormalizers = True
+                # Get the majority entry(ies), the votes for that entry(ies),
+                # as well the entries that voted for the majority entry(ies).
+                majorEntry, maxVotes_entry, maxVotes_group, majorGroupKey = self._majorityFromFrequencyList(freqList)
+                totalVotes = label.totalvotes()
 
-                    # List of grouped words and their cumulative frequencies. In the
-                    # end, the group with the largest cumulative frequency will have
-                    # the majority selected from it. The idea is that only similar
-                    # words will be located in the same group.
-                    # group.total = cumulative weight of this group
-                    # group.aggMap = dictionary of key to weight
-                    freqList = self._buildFrequencyList(label, useLossyNormalizers)
+                # # The entries not in the majority group
+                # ignoredEntries = set(indice for value, indice in
+                #                      sortedAttrsCopy if value not in
+                #                      majorGroupKey)
+                # # The entries in the majority group
+                # usedEntries = set(indice for value, indice in
+                #                   sortedAttrsCopy if value in
+                #                   majorGroupKey)
+                #
+                votesForMajority = floor(0.5 * totalVotes) + 1
 
-                    # Get the majority entry(ies), the votes for that entry(ies),
-                    # as well the entries that voted for the majority entry(ies).
-                    majorEntry, maxVotes_entry, maxVotes_group, majorGroupKey = self._majorityFromFrequencyList(freqList)
-                    totalVotes = label.totalvotes()
-
-                    # # The entries not in the majority group
-                    # ignoredEntries = set(indice for value, indice in
-                    #                      sortedAttrsCopy if value not in
-                    #                      majorGroupKey)
-                    # # The entries in the majority group
-                    # usedEntries = set(indice for value, indice in
-                    #                   sortedAttrsCopy if value in
-                    #                   majorGroupKey)
-                    #
-                    votesForMajority = floor(0.5 * totalVotes) + 1
-
-                    if (totalVotes > 0):  # - TODO original: 1
-                        # It only makes sense to calsulate ratio if there is more
-                        # than 1 worker's answer
-                        if self.top2:
-                            if (maxVotes_group != -1):
-                                ratio = maxVotes_entry / float(maxVotes_entry + maxVotes_group)
-                            else:
-                                ratio = 1
+                if (totalVotes > 0):  # - TODO original: 1
+                    # It only makes sense to calsulate ratio if there is more
+                    # than 1 worker's answer
+                    if self.top2:
+                        if (maxVotes_group != -1):
+                            ratio = maxVotes_entry / float(maxVotes_entry + maxVotes_group)
                         else:
-                            ratio = maxVotes_entry / float(totalVotes)
+                            ratio = 1
                     else:
-                        ratio = 0
+                        ratio = maxVotes_entry / float(totalVotes)
+                else:
+                    ratio = 0
 
-                    # A label that reached majority will be processed here only.
-                    if ratio > 0.9:
-                        consensusFound = True
-                        label.status = "complete"
-                        label.data["value"] = majorEntry[0]  # TODO by default, the first one
-                        consensusCount += 1
+                # A label that reached majority will be processed here only.
+                if ratio > 0.8:
+                    consensusFound = True
+                    label.status = "complete"
+                    label.data["value"] = majorEntry[0]  # TODO by default, the first one
+                    consensusCount += 1
 
-                        # Format grouping row
-                        # groupingRow.append(self._flattenAggMapList(freqList))
+                    # Format grouping row
+                    # groupingRow.append(self._flattenAggMapList(freqList))
 
-                        # Algorithm type
-                        # if useLossyNormalizers:
-                        #     majorityRow.append('lossy')
-                        # else:
-                        #     majorityRow.append('lossless')
-                        # Consensus Response Type
-                        # Real
-                        # if len(majorEntry) == 1 and majorEntry[0] != self.defaultResponse:
-                        #     majorityRow.append('real')
-                        # # Blank / Default response
-                        # elif len(majorEntry) == 1 and majorEntry[0] == self.defaultResponse:
-                        #     majorityRow.append('blank')
-                        # More than one majority response
-                        # else:
-                        #     if self.defaultResponse in majorEntry:
-                        #         # This really should not happen
-                        #         majorityRow.append('blank2')
-                        #     else:
-                        #         majorityRow.append('real')
-                        #     self._writeDiffToFile(fileKey, label, freqList)
-
-                        # totalOk += 1
-                        # votesExtra = maxVotes - votesForMajority
-                        # # Calculate the min number of votes that can be removed from
-                        # # the majority and still allow the majority to be kept
-                        # minVotesNeededToKeepMajority = min(
-                        #     minVotesNeededToKeepMajority, votesExtra)
-                        # # Update the set of entries used for calculating a majority to
-                        # # be the intersection of entries that have been used so far and
-                        # # the set of entries that were were to calculate the majority
-                        # # for this attribute
-                        # entriesUsedForMajority &= usedEntries
-                    # Only process labels that did not reach a majority if we are
-                    # in the consensus iteration using lossy normalizers.
-                    # In other words, anything here did not reach a consensus!
-                    # elif useLossyNormalizers:
-                    #     # Format grouping row
-                    #     groupingRow.append(self._flattenAggMapList(freqList))
-                    #
-                    #     # Format consensus row
-                    #     if self.acceptBestWork:
-                    #         # Output best choice even when majority was not reached
-                    #         consensusRow.append(majorEntry[0])
+                    # Algorithm type
+                    # if useLossyNormalizers:
+                    #     majorityRow.append('lossy')
+                    # else:
+                    #     majorityRow.append('lossless')
+                    # Consensus Response Type
+                    # Real
+                    # if len(majorEntry) == 1 and majorEntry[0] != self.defaultResponse:
+                    #     majorityRow.append('real')
+                    # # Blank / Default response
+                    # elif len(majorEntry) == 1 and majorEntry[0] == self.defaultResponse:
+                    #     majorityRow.append('blank')
+                    # More than one majority response
+                    # else:
+                    #     if self.defaultResponse in majorEntry:
+                    #         # This really should not happen
+                    #         majorityRow.append('blank2')
                     #     else:
-                    #         consensusRow.append('')
-                    #
-                    #     # Output the key diffs if this label did not reach a consensus
+                    #         majorityRow.append('real')
                     #     self._writeDiffToFile(fileKey, label, freqList)
-                    #
-                    #     # How many votes are still needed for a majority?
-                    #     votesNeeded = votesForMajority - maxVotes_entry
-                    #     # If there are 2+ major entries, then we might need more
-                    #     # workers for this task
-                    #     if len(majorEntry) == 1:
-                    #         # Calculate the max number of votes needed for all
-                    #         # attributes to attain the majority
-                    #         maxVotesNeededForMajority = max(votesNeeded,
-                    #                                         maxVotesNeededForMajority)
-                    #         # Update the set of ignored entries to be the intersection
-                    #         # of the set of entries that have been ignored so far and
-                    #         # the set of entries that were ignored when calculating the
-                    #         # consensus for this attribute
-                    #         # entriesNotUsedForMajority &= ignoredEntries
-                    #     # This ensures that the task will be assigned more workers
-                    #     else:
-                    #         maxVotesNeededForMajority = len(attrSets)
 
-            output.write(str(consensusCount) +" / "+str(len(self.labels))+"\n")
-            output.flush()
+                    # totalOk += 1
+                    # votesExtra = maxVotes - votesForMajority
+                    # # Calculate the min number of votes that can be removed from
+                    # # the majority and still allow the majority to be kept
+                    # minVotesNeededToKeepMajority = min(
+                    #     minVotesNeededToKeepMajority, votesExtra)
+                    # # Update the set of entries used for calculating a majority to
+                    # # be the intersection of entries that have been used so far and
+                    # # the set of entries that were were to calculate the majority
+                    # # for this attribute
+                    # entriesUsedForMajority &= usedEntries
+                # Only process labels that did not reach a majority if we are
+                # in the consensus iteration using lossy normalizers.
+                # In other words, anything here did not reach a consensus!
+                # elif useLossyNormalizers:
+                #     # Format grouping row
+                #     groupingRow.append(self._flattenAggMapList(freqList))
+                #
+                #     # Format consensus row
+                #     if self.acceptBestWork:
+                #         # Output best choice even when majority was not reached
+                #         consensusRow.append(majorEntry[0])
+                #     else:
+                #         consensusRow.append('')
+                #
+                #     # Output the key diffs if this label did not reach a consensus
+                #     self._writeDiffToFile(fileKey, label, freqList)
+                #
+                #     # How many votes are still needed for a majority?
+                #     votesNeeded = votesForMajority - maxVotes_entry
+                #     # If there are 2+ major entries, then we might need more
+                #     # workers for this task
+                #     if len(majorEntry) == 1:
+                #         # Calculate the max number of votes needed for all
+                #         # attributes to attain the majority
+                #         maxVotesNeededForMajority = max(votesNeeded,
+                #                                         maxVotesNeededForMajority)
+                #         # Update the set of ignored entries to be the intersection
+                #         # of the set of entries that have been ignored so far and
+                #         # the set of entries that were ignored when calculating the
+                #         # consensus for this attribute
+                #         # entriesNotUsedForMajority &= ignoredEntries
+                #     # This ensures that the task will be assigned more workers
+                #     else:
+                #         maxVotesNeededForMajority = len(attrSets)
+        return consensusCount
+
 
         # Before returning, create the worker need row if this task did not reach a
         # satisfactory consensus when considering all fields.
@@ -663,115 +648,70 @@ class Consensus(object):
 
         # Create the file attribute map
         # Maps filenames to the rows associated with them
-        fileMap = collections.defaultdict(list)
+        # fileMap = collections.defaultdict(list)
         # Each row is a dictionary of strings to strings
         # Keys are the names of the columns (skipped by the reader)
         # Values are data from the row being read
         #for row in csvInputFileReader:
         #    fileMap[row[self.keyLabel]].append(row)
-        for index, subject in enumerate(self.inputJson["subjects"]):
-            # if index % 10 == 0:
-            #     print("did "+str(index)+" pages")  # not right
-            for assertion in subject["assertions"]:
-                fileMap[subject["id"]].append(assertion)
+        # for index, subject in enumerate(self.inputJson["subjects"]):
+        #     # if index % 10 == 0:
+        #     #     print("did "+str(index)+" pages")  # not right
+        #     for assertion in subject["assertions"]:
+        #         fileMap[subject["id"]].append(assertion)
 
         print("Determining consensus among data...")
         # Create and write consensus data
         # Data written to output is not sorted by keyLabel
         numPagesProcessed = 0
-        totalWithoutFullConsensus = 0
+        total_page = len(self.labels_by_page)
+        total_consensus = 0
+        total_label = 0
         startTime = time.time()
-        for key in sorted(fileMap.keys()):  # for key in sorted(output_json["subjects"]):  #
-            self.getConsensus(key, self.labels)  #not determine de page yet
-
-            numPagesProcessed += 1
-            # Print some output for calculations that take a long time
-            stopTime = time.time()
-            print("Completed", numPagesProcessed, "out of", len(fileMap),
-                  "in", stopTime - startTime, " secs")
-
-            startTime = stopTime
-
-            print("output to json...")
-            for subject in self._outputJson["subjects"]:
-                if subject["id"] == key:
-                    subject['assertions'] = [label.to_json() for label in self.labels]
-        file_to_write = open('jc.json', 'w')
-        json.dump(self._outputJson, file_to_write)
+        with open(os.path.join(self.outputFolder, 'ConsensusCount.txt'), 'w') as output:
+            for page in self.labels_by_page:  # for key in sorted(output_json["subjects"]):  #
+                consensusCount = self.getConsensus(page)
+                total_consensus += consensusCount
+                total_label += len(page["assertions"])
+                page["assertions"] = [label.to_json() for label in page["assertions"]]
+                numPagesProcessed += 1
+                # Print some output for calculations that take a long time
+                if numPagesProcessed % 1000 == 0:
+                    print("Completed", numPagesProcessed, "out of", total_page, "pages")
+                output.write(str(consensusCount) + " / " + str(len(page["assertions"])) + "\n")
+                output.flush()
+        stopTime = time.time()
+        print("Total times:", stopTime - startTime)
+        print("output to json...")
+        file_to_write = open(os.path.join(self.outputFolder, 'result.json'), 'w')
+        json.dump({"subjects": self.labels_by_page}, file_to_write)
         file_to_write.close()
-        self.normalizedFile.close()
+        return total_consensus, total_label
 
-    """
-        Writes the diffs of the freqList into a output file.
-    """
-    def _writeDiffToFile(self, fileKey, label, freqList):
-        if not self.debug:
-            return
-        diffOutput = []
-        # Output diff between entries
-        diffOutput.append('========\n')
-        diffOutput.append(label + ' (' + fileKey + '):\n')
-
-        groups = []
-        # Traverse the AggMaps
-        # Extract the keys, but keep their grouping
-        # Also output the grouping of the keys to the output file
-        for groupMap in freqList:
-            tempList = []
-            diffOutput.append('(\n')
-            for key in groupMap.aggMap.keys():
-                tempList.append(key)
-                diffOutput.append('\t' + key + '\n')
-            diffOutput.append(')\n')
-            groups.append(tempList)
-        diffOutput.append('========\n')
-
-        # Compare only keys in different groups to each other
-        # First group
-        for i in range(len(groups)):
-            # Items in the first group
-            for k in range(len(groups[i])):
-                # Second group
-                for j in range(len(groups) - i - 1):
-                    # Items in the second group
-                    for h in range(len(groups[i + j + 1])):
-                        # Write lossless clean first
-                        s1 = (self.clean((groups[i])[k]) + '\n').splitlines(1)
-                        s2 = (self.clean((groups[i + j + 1])[h]) + '\n').splitlines(1)
-                        diff = ndiff(s1, s2)
-                        diffOutput.append('[LOSSLESS]\n')
-                        diffOutput.append(''.join(diff))
-                        # Then write lossy clean
-                        s1 = (self.lossyClean(self.clean((groups[i])[k])) + '\n').splitlines(1)
-                        s2 = (self.lossyClean(self.clean((groups[i + j + 1])[h])) + '\n').splitlines(1)
-                        diff = ndiff(s1, s2)
-                        diffOutput.append('[LOSSY]\n')
-                        diffOutput.append(''.join(diff))
-                        diffOutput.append('~~~\n')
-        diffWriter = open(os.path.join(self.outputFolder, self.diffOutputFileName), 'a')
-        diffWriter.writelines(diffOutput)
-        diffWriter.close()
+    def plot(self,total_consensus, total_label):
 
 
 def main():
-    """i=0
-    json_collection = {}
-    for element in os.listdir('emigrant/'):
-      i+=1
-      if element.endswith('.json'):
-         # print("'%s' est un fichier texte" % element)
-         # print('emigrant/'+str(element))
-         #
-         js = open('emigrant/'+str(element))
-         ij = json.load(js)
-         for page in ij["subjects"]:
-            json_collection.setdefault("subjects",[]).append(page)
-            #print(json_collection)
-    file_to_write = open('jc.json','w')
-    json.dump(json_collection,file_to_write)
-    file_to_write.close()
-    print('ok');"""
-    getConsensus = Consensus('emigrant/5637a1a03262330003ce1c00.json')
+
+    # i = 0
+    # json_collection = {}
+    # for element in os.listdir('emigrant/'):
+    #     i += 1
+    #     if element.endswith('.json'):
+    #         # print("'%s' est un fichier texte" % element)
+    #         # print('emigrant/'+str(element))
+    #         #
+    #         js = open('emigrant/'+str(element), encoding='utf-8')
+    #         ij = json.load(js)
+    #         for page in ij["subjects"]:
+    #             page["superID"] = str(element)
+    #             json_collection.setdefault("subjects", []).append(page)
+    #             #print(json_collection)
+    # file_to_write = open('dataset.json', 'w')
+    # json.dump(json_collection,file_to_write)
+    # file_to_write.close()
+    # print('ok')
+    getConsensus = Consensus('dataset.json')
     getConsensus.setOutputFolder('resTotal')
     getConsensus.calculateConsensus()
     print()
