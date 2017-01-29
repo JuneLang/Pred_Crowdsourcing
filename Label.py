@@ -23,7 +23,10 @@ class Label(object):
 
     @data.setter
     def data(self, v):
-        self._data = v
+        if v:
+            self._data = v
+        else:
+            self._data = {}
 
     @property
     def versions(self):
@@ -50,10 +53,23 @@ class Label(object):
 
     def group_dicts(self):
         dicts = {}
-        for original, normalized in self._normalized_versions:
-            for version in self.versions:
-                if version["data"]["value"] == original:
-                    dicts[normalized].append(original)
+        for version in self.versions:
+            if version["data"].get("value"):
+                n = self._normalized_versions[version["data"]["value"]]
+                if not dicts.get(n):
+                    dicts.setdefault(n, [])
+                    dicts[n][0] = 0
+                dicts[n][0] += version["votes"]
+                dicts[n].append(version)
+
+            # for original, normalized in self._normalized_versions:
+            #     if version["data"].get("value"):
+            #         if version["data"]["value"] == original:
+            #             if not dicts.get(normalized):
+            #                 dicts.setdefault(normalized, [])
+            #                 dicts.setdefault("votes", 0)
+            #             dicts[normalized].append(version)
+            #             dicts["votes"] += version["votes"]
         return dicts
 
     def to_json(self):
