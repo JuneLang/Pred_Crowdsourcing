@@ -1,13 +1,14 @@
-
+from datetime import datetime
 
 class Label(object):
     def __init__(self, properties):
-        self._id = properties["id"]
+        self.id = properties["id"]
         self._status = properties["status"]
         self._name = properties["name"]
         self._data = properties["data"]
         self._versions = properties["versions"]  # versions of translations of users
         self._normalized_versions = {}
+        self._ratio = 0.0
 
     @property
     def status(self):
@@ -23,8 +24,8 @@ class Label(object):
 
     @data.setter
     def data(self, v):
-        if v:
-            self._data = v
+        if v and self._data.get("value"):
+            self._data["value"] = v
         else:
             self._data = {}
 
@@ -44,9 +45,17 @@ class Label(object):
     def normalized_versions(self, v):
         self._normalized_versions = v
 
+    @property
+    def ratio(self):
+        return self._ratio
+
+    @ratio.setter
+    def ratio(self, v):
+        self._ratio = v if v else self._ratio
+
     def totalvotes(self):
         votes = 0
-        if self._versions:
+        if self._versions is not None:
             for version in self._versions:
                 votes += version["votes"]
         return votes
@@ -72,9 +81,38 @@ class Label(object):
             #             dicts["votes"] += version["votes"]
         return dicts
 
+    def votes_sequence(self):
+        seq = []
+        if self.versions and (self.data is not None) and self.data.get("value"):
+            for version in self.versions:
+                for instance in version["instances"]:
+                    created = instance["created"]
+                    time = datetime.strptime(created, "%Y-%m-%dT%H:%M:%SZ")
+                    if len(seq) < 1:
+                        if version["data"]["value"] == "":
+                            seq.append(("", time))
+                        else:
+                            seq.append((self.normalized_versions[version["data"]["value"]], time))
+                    else:
+                        for i in range(len(seq)):
+                            if time <= seq[i][1]:
+                                if version["data"]["value"] == "":
+                                    seq.insert(i, ("_emptyKey", time))
+                                else:
+                                    seq.insert(i, (self.normalized_versions[version["data"]["value"]], time))
+                                break
+                        if version["data"]["value"] == "":
+                            seq.insert(i, ("_emptyKey", time))
+                        else:
+                            seq.insert(i, (self.normalized_versions[version["data"]["value"]], time))
+                        break
+
+        seq = [s[0] for s in seq]
+        return seq
+
     def to_json(self):
         json = {}
-        json["id"] = self._id
+        json["id"] = self.id
         json["status"] = self.status
         json["name"] = self._name
         json["data"] = self.data
