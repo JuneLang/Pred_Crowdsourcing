@@ -31,13 +31,13 @@ Then using it to install the packages.
 
 ##Run Majority Voting
 Simply, initiate the class `MajorityVoting' specifying the input file (json) and the minimal number of votes(not required, is not set, is 1 by default).
-    getConsensus = MajorityVoting(input_json, number_votes)  
+    `getConsensus = MajorityVoting(input_json, number_votes)`  
 And then, set the ouput folder to stored the result:  
-    getConsensus.setOutputFolder(output_folder)  
+    `getConsensus.setOutputFolder(output_folder)`  
 And then, set the seuil for finding the consensus. If this function is not called, the seuil is set to 0.5 by default:  
-    getConsensus.set_seuil(seuil)  
+    `getConsensus.set_seuil(seuil)`  
 Last, run the class:  
-    getConsensus.calculateConsensus()  
+    `getConsensus.calculateConsensus()`  
 The result will be stored in the ouput folder.
 
 ##Plot the analyses
