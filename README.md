@@ -22,22 +22,22 @@ We are using [Python 3.5.2](https://www.python.org/downloads/release/python-352/
 And we use [Anaconda](https://www.continuum.io/downloads) for package and environment control(strongly recommended for Windows, because `scipy` is difficult to be installed in Windows. And it is also good for Linux or Mac).
 Download and install `Anaconda` and typing the commands in the terminal: `conda update conda` and `conda update anaconda`. If they are excuted successfully, it means `Annaconda` is good to work.
 Then using it to install the packages.
-	>[numpy](http://www.numpy.org/); To install it, use `conda install --name root numpy` to install or update it in the root environment.  
-	>[scipy](http://www.scipy.org/install.html); Use `conda install --name root scipy` to install or update.  
-	>[matplotlib](http://matplotlib.org/); Use `conda install --name root matplotlib` to install or update.  
-	>[seaborn](http://seaborn.pydata.org/); Use `conda install --name root seaborn` to install or update.  
+>[numpy](http://www.numpy.org/); To install it, use `conda install --name root numpy` to install or update it in the root environment.  
+>[scipy](http://www.scipy.org/install.html); Use `conda install --name root scipy` to install or update.  
+>[matplotlib](http://matplotlib.org/); Use `conda install --name root matplotlib` to install or update.  
+>[seaborn](http://seaborn.pydata.org/); Use `conda install --name root seaborn` to install or update.  
 
 #How it works 
 
 ##Run Majority Voting
 Simply, initiate the class `MajorityVoting' specifying the input file (json) and the minimal number of votes(not required, is not set, is 1 by default).
-    getConsensus = MajorityVoting(input_json, number_votes)
-And then, set the ouput folder to stored the result:
-    getConsensus.setOutputFolder(output_folder)
-And then, set the seuil for finding the consensus. If this function is not called, the seuil is set to 0.5 by default:
-    getConsensus.set_seuil(seuil)
-Last, run the class:
-    getConsensus.calculateConsensus()
+    getConsensus = MajorityVoting(input_json, number_votes)  
+And then, set the ouput folder to stored the result:  
+    getConsensus.setOutputFolder(output_folder)  
+And then, set the seuil for finding the consensus. If this function is not called, the seuil is set to 0.5 by default:  
+    getConsensus.set_seuil(seuil)  
+Last, run the class:  
+    getConsensus.calculateConsensus()  
 The result will be stored in the ouput folder.
 
 ##Plot the analyses
@@ -54,7 +54,7 @@ Call the function `plot_propositions()` plots a histogram showing that the numbe
 
 ###plot_proposition
 Call the function `plot_propositions(seuil, plot_range)` to plot the distribution of labels (to see how many labels reach consensus with seuil and with different numbers of propositions).
->`seuil`: the seuil of consensus;
->`plot_range`: the range of the number of propositions. For example, using `range(5)` as `plot_range` means to plot 2 to 6 propositions.
+>`seuil`: the seuil of consensus;  
+>`plot_range`: the range of the number of propositions. For example, using `range(5)` as `plot_range` means to plot 2 to 6 propositions.  
 
 
