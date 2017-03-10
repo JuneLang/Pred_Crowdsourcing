@@ -30,7 +30,7 @@ Then using it to install the packages.
 #How it works 
 
 ##Run Majority Voting
-Simply, initiate the class `MajorityVoting` specifying the input file (json) and the minimal number of votes(not required, is not set, is 1 by default).
+Simply, initiate the class `MajorityVoting` specifying the input file (json) and the minimal number of votes(not required, is not set, is 1 by default).  
     `getConsensus = MajorityVoting(input_json, number_votes)`  
 And then, set the ouput folder to stored the result:  
     `getConsensus.setOutputFolder(output_folder)`  
