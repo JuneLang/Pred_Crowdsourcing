@@ -102,27 +102,26 @@ class MajorityVoting(object):
     def set_seuil(self, s):
         self.seuil = s
 
-    """
-            Returns the original string - applies no change.
-    """
-
     def _noChange(self, string):
+        """
+        @:return: Returns the original string - applies no change.
+        """
         return string
 
-    """
-        Returns true if the two strings are equal. The first string must be the
-        reference string.
-    """
-
     def _exactMatch(self, string1, string2):
+        """
+        @:return: Returns true if the two strings are equal. The first string must be the
+        reference string.
+        """
         return string1 == string2
 
-    """
+
+    def translateString(self, label, string):
+        """
         Normalizes string using self.translationTable
         It is assumed that the correct translation table will be set before
         attempting to normalize the string.
-    """
-    def translateString(self, label, string):
+        """
         normalized = string
         # Call the other cleaning functions before
         if self.translationTables.get(label):
@@ -171,6 +170,10 @@ class MajorityVoting(object):
         return ret
 
     def get_labels_by_page(self):
+        """
+        Initiate Label object.
+        :return: list with Label objects.
+        """
         count = 0
         labels_by_page = []
         for subject in self.input_json["subjects"]:
@@ -187,12 +190,17 @@ class MajorityVoting(object):
         return labels_by_page
 
     def _getSortedAttrsForLabel(self, label):
-
+        """
+        Get lossless normalization.
+        :param label: the label to be manipulated
+        :return: lossless normalization
+        """
         # Normalize any default responses
         sortedAttrsTemp = {}
         if label.versions:
             for version in label.versions:
-                if version["data"].get("value"):  # TODO original emigrant json has more than one items, which maybe not exist in our case
+                # original emigrant json has more than one items, which maybe not exist in our case
+                if version["data"].get("value"):
                     normalized = self.clean(version["data"]["value"])
                     # Apply all lossless functions for this attribute
                     if self.useFunctionNormalizer and False:  # - TODO
@@ -226,7 +234,9 @@ class MajorityVoting(object):
 
         return sortedAttrsCopy
 
-    """
+
+    def _buildFrequencyList(self, label, useLossyNormalizers):
+        """
         List of grouped words and their cumulative frequencies. In the
         end, the group with the largest cumulative frequency will have
         the majority selected from it. The idea is that only similar
@@ -236,8 +246,10 @@ class MajorityVoting(object):
 
         If useLossyNormalizers = True, then lossy normalizers will be used as
         well in the comparision. Else, only lossless normalizers will be used.
-    """
-    def _buildFrequencyList(self, label, useLossyNormalizers):
+        :param label: the label to be manipulated
+        :param useLossyNormalizers: whether to use lossy normalization
+        :return: the frequence list of each proposition
+        """
         freqList = []
         # Loop over each attribute to try to put it in a group
         for original, normalized in label.normalized_versions.items():
@@ -285,13 +297,15 @@ class MajorityVoting(object):
                 freqList.append(newEntry)
         return freqList
 
-    """
+
+    def _majorityFromFrequencyList(self, freqList):
+        """
         Returns the majority entry(ies), the votes for the entry(ies), and all
         the keys that were in the majority group containing that entry. The
         keys that were in the majority group containing the majority entry
         essentially 'voted' for the majority entry.
-    """
-    def _majorityFromFrequencyList(self, freqList):
+        :param freqList: the frequence list
+        """
         # Search for the majority entry
         maxVotes_entry = -1
         maxVotes_group = -1
@@ -332,6 +346,11 @@ class MajorityVoting(object):
         return majorEntry, maxVotes_entry, maxVotes_group, majorGroupKey
 
     def getConsensus(self, page):
+        """
+        For each label in the page, get their consensus.
+        :param page:
+        :return: the count of consensus and the count of labels.
+        """
         consensus_count = 0
         labels_count = 0
         # Iterate over the labels to to find a consensus per label
@@ -414,10 +433,11 @@ class MajorityVoting(object):
 
     def calculateConsensus(self):
         """
-            Reads the input file, computes the grouping and majority, and writes the
-            results to the output files.
-            Should be called after setting any optional parameters for the
-            ConsensusCalculator.
+        Reads the input file, computes the grouping and majority, and writes the
+        results to the output files.
+        Should be called after setting any optional parameters for the
+        ConsensusCalculator.
+        :return the percentage of consensus found
         """
 
         if not self.outputFolder:
@@ -453,10 +473,10 @@ class MajorityVoting(object):
                 output.flush()
         stopTime = time.time()
         print("Total times:", stopTime - startTime)
-        # print("output to json...")
-        # file_to_write = open(os.path.join(self.outputFolder, 'result.json'), 'w')
-        # json.dump({"subjects": outputJson}, file_to_write)
-        # file_to_write.close()
+        print("output to json...")
+        file_to_write = open(os.path.join(self.outputFolder, 'result.json'), 'w')
+        json.dump({"subjects": outputJson}, file_to_write)
+        file_to_write.close()
         return total_consensus * 1.0 / total_label
 
     def chronology(self):
@@ -887,72 +907,7 @@ class MajorityVoting(object):
                         if self.labels_by_page[i]["assertions"][j].status == "completed":
                             count2 += 1
         return count1, count2
-        # def plot_proposition(plot_range):
-        #     def auto_label(rects, ax, list_consensus, height_list):
-        #         # Get y-axis height to calculate label position from.
-        #         (y_bottom, y_top) = ax.get_ylim()
-        #         # y_height = 60000  # y_top - y_bottom
-        #         for i, rect in enumerate(rects):
-        #             height = height_list[i]
-        #             label_position = height + 1  # (y_height * 0.07)
-        #             ax.text(rect.get_x() + rect.get_width() / 2., label_position,
-        #                     str(list_consensus[i]) + "/" + str(height_list[i]),
-        #                     ha='center', va='bottom', rotation="vertical")
-        #
-        #     # propostions: an array(#propo, list_of votes of labels)
-        #     propostions_ours = list()  # each item is an array of dict{vk: #vk}
-        #     for page in self.labels_by_page:
-        #         for label in page["assertions"]:
-        #             if (label.freq_list is not None) and len(label.freq_list) > 1:  # calcule pas #proposition = 1
-        #                 v = label.totalvotes()
-        #                 if label.data.get("value") is None:
-        #                     continue
-        #                 l = len(label.freq_list)
-        #                 if label.status == "completed":
-        #                     if l > len(propostions_ours) + 1:
-        #                         for i in range(len(propostions_ours), l):
-        #                             propostions_ours.append([])
-        #                     propostions_ours[l - 2].append(v)
-        #     # p_votes: reduce votes for each proposition
-        #     proposition_votes_ours = []
-        #     for p in propostions_ours:
-        #         previous = -1
-        #         p_with_dicts = {}
-        #         p.sort()
-        #         for v in p:
-        #             if v != previous:
-        #                 p_with_dicts.setdefault(str(v), 1)
-        #                 previous = v
-        #             else:
-        #                 p_with_dicts[str(previous)] += 1
-        #         proposition_votes_ours.append(p_with_dicts)
-        #
-        #     # start to plot
-        #     proposition_votes = [sorted(p.items(), key=lambda d: d[0]) for p in proposition_votes_ours]
-        #     colors = [c for c in sns.color_palette("Set2", 10)]
-        #     fig, ax = plt.subplots(len(plot_range))
-        #
-        #     for i in plot_range:
-        #         p = proposition_votes[i]
-        #         votes = [d[0] for d in p]
-        #         values = [d[1] for d in p]  # list of ratio
-        #
-        #         rects1 = ax[i].bar(votes, values, color="#f4320c", label="aaaa")
-        #         # rects2 = ax[i].bar(votes, values2, bottom=values1, color=colors[i - plot_range[0]])
-        #         ax[i].set_title("Proposotions " + str(i + 2))
-        #         xlim = [int(d) for d in votes]
-        #         ax[i].set_xticks(sorted(xlim))
-        #         ax[i].set_xticklabels(sorted(xlim))
-        #         ax[i].set_xlim(min(xlim), max(xlim) + 1)
-        #         # ax[i, j].set_legend([rects1, rects2], ["Consensus found", "Not found"])
-        #         # auto_label(rects1, ax[i], values1, [v1 + v2 for v1, v2 in zip(values1, values2)])
-        #
-        #     sns.set_style("whitegrid")
-        #     plt.ylabel("#Test")
-        #     plt.xlabel("#Votes")
-        #     fig.tight_layout()
-        #     plt.show()
-        # plot_proposition(range(5))
+
 
 def plot(ax, axes_x, axes_y, color="blue"):
     x = np.array(axes_x)
@@ -976,8 +931,12 @@ def find_seuil1(start, end, scan):
     plot(seuil, percentage_consensus)
 
 
-# Combine json files in a directory into one single json file
 def combine_json(dit):
+    """
+    Combine json files in a directory into one single json file
+    :param dit: the folder contains all the json
+    :return:
+    """
     print('start...')
     i = 0
     json_collection = {}
