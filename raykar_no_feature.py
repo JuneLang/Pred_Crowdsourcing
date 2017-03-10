@@ -1,6 +1,7 @@
 import numpy
 import math
 import sklearn
+import time
 
 class RaykarClassifier(object):
     """Classifier based on the Raykar et al. (2010) EM algorithm.
@@ -18,16 +19,19 @@ class RaykarClassifier(object):
         self.n_restarts = n_restarts
         self.epsilon = epsilon
 
-    def init_parameters(self, mv):
+    def init_parameters(self, mv, y, y_labels):
         """
 
         :param mv: list of results of majority of voting
+        :param y: (n_workers, m_labels)
+        :param y_labels: list of labels
         :return:
         """
+        self.mv = mv
+        self.y = y
+        self.y_labels = y_labels
 
-    def run(self, y):
-        # Compute majority vote labels for initialisation.
-        mv = majority_vote(y)
+    def run(self, mv, y):
         m = mv.copy()
         # Add a small random factor for variety.
         m[m == 1] -= numpy.abs(numpy.random.normal(scale=1e-2,
@@ -40,11 +44,29 @@ class RaykarClassifier(object):
         y_mask = y.mask
         y_1 = y.filled(1)
         y = y_0 = y.filled(0)
-
+        iter_results = []
         for trial in range(self.n_restarts):
+            a = numpy.zeros((y.shape[0],), dtype=float)
+            m_new = numpy.zeros((m.shape[0],), dtype=float)
 
-            m = self.m_step()
-            self.e_step()
+            while True:
+                then = time.time()
+
+                a = self.m_step(m, y, y_mask)
+                m_new = self.e_step(a, m, y, y_mask)
+                dm = numpy.linalg.norm(m_new - m)
+
+                if dm < self.epsilon:
+                    iter_results.append((a, m_new))
+
+                m = m_new
+
+                # Estimate time remaining.
+                now = time.time()
+                dt = now - then
+                print('Raykar iteration took {} s.'.format(dt))
+
+
 
     def m_step(self, m, y, y_mask):
         """
@@ -52,7 +74,7 @@ class RaykarClassifier(object):
         :param y: (n_labllers, m_examples)
         :return:
         """
-        a = numpy.zeros((y.shape[0],))
+        a = numpy.zeros((y.shape[0],), dtype=float)
         reciprocal = numpy.ones((y.shape[0]))
         for t in range(y.shape[0]):
             for i in range(y.shape[1]):
@@ -70,12 +92,15 @@ class RaykarClassifier(object):
 
         :return:
         """
+        m_new = numpy.zeros((m.shape[0],), dtype=float)
         for i in range(m.shape[0]):
             sum_a = numpy.sum(a)
             for j in range(a.shape[0]):
                 if y_mask[i, j]:
                     continue
-                m[i] += a[j] * y[i, j] / sum_a
+                m_new[i] += a[j] * y[i, j] / sum_a
+        return m_new
 
 
 if __name__ == '__main__':
+    print()

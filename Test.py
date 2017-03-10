@@ -1,30 +1,27 @@
-# test codes
 from Label import Label
 import json
-from difflib import ndiff
 from math import floor
-import argparse
 import collections
 import os
 import re
 import time
 import copy
 import numpy as np
-import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import difflib as df
-
-"""
-    An aggregate map class. self.total represents the total number of
-    items in the self.aggMap. self.aggMap is a map of string to the frequency
-    these words were encountered. In the context of this problem, AggMap is
-    used to group words that a similar. Only words who are in the majority
-    AggMap will be considered as a solution to the consensus.
-"""
+import string
+from User import User
 
 
 class AggMap:
+    """
+        An aggregate map class. self.total represents the total number of
+        items in the self.aggMap. self.aggMap is a map of string to the frequency
+        these words were encountered. In the context of this problem, AggMap is
+        used to group words that a similar. Only words who are in the majority
+        AggMap will be considered as a solution to the consensus.
+    """
     def __init__(self):
         self.total = 0
         self.aggMap = collections.defaultdict(int)
@@ -34,8 +31,8 @@ class AggMap:
         return str(self.total) + str(self.aggMap)
 
 
-class Consensus(object):
-    def __init__(self, inputFile, mv):
+class MajorityVoting(object):
+    def __init__(self, inputFile, mv=1):
         # Indicates if output is verbose for debugging
         self.debug = False
 
@@ -50,7 +47,7 @@ class Consensus(object):
         self.min_votes = mv
         self.list_ratio = []
         self.workers = []
-
+        self.total_labels = 0
         # Label that consensus entries are grouped by
         # self.keyLabel = self.getKeyLabel()
         # Output folder
@@ -69,7 +66,7 @@ class Consensus(object):
         # Labels to find a consensus for
         # self.labels = labelMap.keys()
         self.labels_by_page = self.get_labels_by_page()
-
+        self.copy_labels = copy.deepcopy(self.labels_by_page)
         # The current translation table
         self.translationTable = None
         self.translationTables = None
@@ -80,76 +77,21 @@ class Consensus(object):
         # Can be decorated for more functionality
         # Adds the PLSS cleaner by default
         self.clean = self._noChange
-        self.lossyClean = self._noChange
+        self.lossyClean = self.normalize_string
         # Exact String comparator - originally does only exact match
         # Can be decorated for more functionality
         self.comparator = self._exactMatch
         # Approximate string comparator
         self.approx = self._exactMatch
-
-        # Punctuation to ignore
-        # The first list removes general punctuation, the second removes punctuation if
-        # not part of a number (ex: 20.99 -> 20.99, but other periods will be removed)
-        self.puncPattern = re.compile(r"[\\,&\"(#)!?$:;'-]|([\./](?!\d))")
-
+        # ratio of similarity of 2 strings
+        self.lossy_ratio = 0.9
         # Flag to ignore empty strings
         self.ignoreEmptyStrings = False
 
-        # Default responses to replace with self.defaultResponse
-        self.ignoreDefaults = False
-        self.defaultResponse = 'unknown'
-        self.defaultResponsesToReplace = ['placeholder', 'unknown', 'Unknown',
-                                          'not given', 'n/a', 'no data', 'nil', '']
-        # The list of regex to detect unknown responses include: single lower
-        # case letters and symbols, repeated characters (2 or more),
-        # different types of unknowns (sn, na, none), only non-characters
-        self.defaultRegexResponsesToReplace = ["^[-\\!?'\".a-z]$", "^([^0-9])\\1+$", \
-                                               "^[uU]nknown .+$", "^[sS][. ]?[nN][.]?$", "^[nN][./ ]?[aA][./]?$", \
-                                               "^[Nn][Oo][Nn][Ee][ ]?[\w?]*$", "^[-\\!?'\"., ]+$"]
-
-        # Stopwords that can be ignored in a response
-        self.stopwords = ['a', 'an', 'if', 'it', 'its', 'of', 'than',
-                          'that', 'the', 'to']
-
-        # Define a regex to normal Public Lands Survey System Notation:
-        # http://faculty.chemeketa.edu/afrank1/topo_maps/town_range.htm
-        # define township match
-        patternHead = '(?P<town>[T])(\.)?(\s)?(?P<townN>[0-9]+)(\s)?'
-        patternHead += '(?P<townD>[NEWS])'
-        patternHead += '|'
-        # define the optional subsection match
-        patternMid = '(?P<sub>(([NEWS./]{1,4})(\s)?((1/4)|(1/2)|Q,)(\s?)(of)?(\s?))+)'
-        # define section match
-        patternTail = '(?P<sec>Sec?)([.,])?(\s)?(?P<secN>[0-9]+)'
-        patternTail += '|'
-        # define range match
-        patternTail += '(?P<range>R)(\.)?(\s)?(?P<rangeN>[0-9]+)(\s)?'
-        patternTail += '(?P<rangeD>[NEWS])[.,;]?'
-        # pattern WITH NO subsection match
-        pattern = patternHead + patternTail
-        # pattern WITH subsection match
-        patternWSub = patternHead + patternMid + patternTail
-        # define separator between occurrences
-        pattern = '((' + pattern + ')(\s)?([.,;])?(\s)?)'
-        patternWSub = '((' + patternWSub + ')(\s)?([.,;]?)?(\s)?)'
-        # define min number of occurrences
-        pattern = '(' + pattern + '{3,})(?P<close>([)]?))'
-        patternWSub = '(' + patternWSub + '{3,})(?P<close>([)]?))'
-        # Precompile the regex pattern for string with NO optional subsections
-        self.plssRegex = re.compile(pattern, flags=re.IGNORECASE)
-        self.plssReplace = '\\g<sec> \\g<secN>, '
-        self.plssReplace += '\\g<town>\\g<townN>\\g<townD>, '
-        self.plssReplace += '\\g<range>\\g<rangeN>\\g<rangeD>.'
-        # Precompile the regex pattern for string WITH optional subsections
-        self.plssRegexWSub = re.compile(patternWSub, flags=re.IGNORECASE)
-        self.plssReplaceWSub = '\\g<sub> ' + self.plssReplace
-
-
-
-    """
-        Sets the output folder.
-    """
     def setOutputFolder(self, outputFolder):
+        """
+            Sets the output folder.
+        """
         self.outputFolder = outputFolder
 
     def read_inputJson(self, input_json):
@@ -199,11 +141,52 @@ class Consensus(object):
             normalized = ' '.join(parts)
         return normalized
 
+    def normalize_string(self, s):
+        """
+        remove punctuation
+        :param s: string to normalize
+        :return: string normalized
+        """
+        trans = str.maketrans('', '', string.punctuation)
+        s = s.translate(trans)
+
+        # to lowercase
+        s = s.lower()
+        return s
+
+    def _flattenAggMapList(self, l):
+        """
+            Helper method to flatten a list of AggMaps.
+            Returns a list in the following format:
+            [[Aggmap1's k,v], [Aggmap2's k,v], ... ]
+        """
+        ret = []
+        # Traverse of AggMaps
+        for m in l:
+            t = []
+            # Traverse over key's and values in that AggMap
+            for k, v in m.aggMap.items():
+                t.append((k, v))
+            ret.append(t)
+        return ret
+
+    def get_labels_by_page(self):
+        count = 0
+        labels_by_page = []
+        for subject in self.input_json["subjects"]:
+            sb = {"id": subject["id"], "superID": subject["superID"], "assertions": []}
+            if subject["assertions"] is not None and len(subject["assertions"]) > 0:
+                for assertion in subject["assertions"]:
+                    if assertion is not None:
+                        if assertion["versions"] and len(assertion["versions"]) > 1:
+                            l = Label(assertion)
+                            count += 1
+                            sb["assertions"].append(l)
+                labels_by_page.append(sb)
+        print(count)
+        return labels_by_page
+
     def _getSortedAttrsForLabel(self, label):
-        # sortedAttrs = []
-        # if label.versions:
-        #     for version in label.versions:
-        #         for i in range(version["votes"]):
 
         # Normalize any default responses
         sortedAttrsTemp = {}
@@ -263,7 +246,7 @@ class Consensus(object):
             for group in freqList:
                 for key in group.aggMap.keys():
                     # Insert exactly
-                    if self.comparator(key, normalized):
+                    if self.comparator(key, normalized):  # key == normalized
                         for version in label.versions:
                             if version["data"].get("value"):
                                 if version["data"]["value"] == original:
@@ -276,14 +259,18 @@ class Consensus(object):
                     if useLossyNormalizers:
                         s1 = self.lossyClean(key)
                         s2 = self.lossyClean(normalized)
-                        if self.approx(s1, s2) or self.comparator(s1, s2):
+                        seq = df.SequenceMatcher(None, s1, s2)
+                        # if seq.ratio() >= 0.9:  # similarity between 2 string to see if they are similar
+                        # if s1 == s2:  # if self.approx(s1, s2) or self.comparator(s1, s2):
+                        if seq.ratio() >= self.lossy_ratio:
                             for version in label.versions:
-                                if version["data"]["value"] == original:
-                                    group.aggMap[normalized] += version["votes"]
-                                    group.aggMap[key] += version["votes"]
-                                    group.total += version["votes"]
-                                    attrFound = True
-                                    break
+                                if version["data"].get("value"):
+                                    if version["data"]["value"] == original:
+                                        group.aggMap[normalized] += version["votes"]
+                                        group.aggMap[key] += version["votes"]
+                                        group.total += version["votes"]
+                                        attrFound = True
+                                        break
                             break
                 if attrFound:
                     break
@@ -316,10 +303,9 @@ class Consensus(object):
                 majorGroup.append(group.aggMap)
             elif group.total > maxVotes_entry:
                 majorGroup = [group.aggMap]
-                maxVotes_group = maxVotes_entry
                 maxVotes_entry = group.total
+                maxVotes_group = maxVotes_entry
 
-        # freqList.sort(key=lambda group : group.total, reverse=True)
 
         # Search for the majority value in the majority group
         # Assumption is the similar entries in the same group are
@@ -345,40 +331,6 @@ class Consensus(object):
                 majorGroupKey.append(key)
         return majorEntry, maxVotes_entry, maxVotes_group, majorGroupKey
 
-    """
-        Helper method to flatten a list of AggMaps.
-        Returns a list in the following format:
-        [[Aggmap1's k,v], [Aggmap2's k,v], ... ]
-    """
-    def _flattenAggMapList(self, l):
-        ret = []
-        # Traverse of AggMaps
-        for m in l:
-            t = []
-            # Traverse over key's and values in that AggMap
-            for k, v in m.aggMap.items():
-                t.append((k, v))
-            ret.append(t)
-        return ret
-
-    def get_labels_by_page(self):
-        count = 0
-        labels_by_page = []
-        for subject in self.input_json["subjects"]:
-            sb = {"id": subject["id"], "superID": subject["superID"], "assertions": []}
-            if subject["assertions"] is not None and len(subject["assertions"]) > 0:
-                for assertion in subject["assertions"]:
-                    if assertion is not None:
-                        if assertion["versions"] and len(assertion["versions"]) > 1:
-                            l = Label(assertion)
-                            count += 1
-                            sb["assertions"].append(l)
-                            # if len(assertion["versions"]) == 3 and l.totalvotes() == 21 or l.totalvotes() == 22:
-                            #     print()
-                labels_by_page.append(sb)
-        print(count)
-        return labels_by_page
-
     def getConsensus(self, page):
         consensus_count = 0
         labels_count = 0
@@ -386,7 +338,7 @@ class Consensus(object):
         for label in page["assertions"]:
 
             # Indicates if lossy normalizer is used for a particular label
-            useLossyNormalizers = False
+            useLossyNormalizers = True
             # Indicates if consensus is reached for a particular label
             consensusFound = False
 
@@ -415,7 +367,7 @@ class Consensus(object):
                 # group.total = cumulative weight of this group
                 # group.aggMap = dictionary of key to weight
                 freqList = self._buildFrequencyList(label, useLossyNormalizers)
-
+                label.freq_list = freqList
                 # Get the majority entry(ies), the votes for that entry(ies),
                 # as well the entries that voted for the majority entry(ies).
                 # if label.id == '580dba0d61643900032cbb03':
@@ -423,18 +375,8 @@ class Consensus(object):
                 majorEntry, maxVotes_entry, maxVotes_group, majorGroupKey = self._majorityFromFrequencyList(freqList)
                 totalVotes = label.totalvotes()
 
-                # # The entries not in the majority group
-                # ignoredEntries = set(indice for value, indice in
-                #                      sortedAttrsCopy if value not in
-                #                      majorGroupKey)
-                # # The entries in the majority group
-                # usedEntries = set(indice for value, indice in
-                #                   sortedAttrsCopy if value in
-                #                   majorGroupKey)
-                #
-                votesForMajority = floor(0.5 * totalVotes) + 1
                 ratio = 0
-                if totalVotes > 1:  # - TODO original: 1 // self.minVotes
+                if totalVotes >= self.min_votes:  # - TODO original: 1 // self.minVotes
                     # It only makes sense to calsulate ratio if there is more
                     # than 1 worker's answer
                     if self.top2:
@@ -447,13 +389,18 @@ class Consensus(object):
                 else:
                     ratio = 0
 
+                if label.data is not None:
+                    if label.data.get("value"):  # for test when seuil = 0
+                        if label.data["value"] == "Mrs. Sylvia Parmentier":
+                            print()
                 # A label that reached majority will be processed here only.
                 if ratio >= self.seuil:
                     if label.data is not None:
                         if label.data.get("value"):  # for test when seuil = 0
                             consensusFound = True
                             label.status = "completed"
-                            label.data = majorEntry[0] if len(majorEntry) > 0 else None  # TODO by default, the first one
+                            # by default, the first one
+                            label.data = majorEntry[0] if len(majorEntry) > 0 else None
                             consensus_count += 1
             # somme labels don't have anything, or have multiple values in "data" which should be ignore
             if label.data is not None:
@@ -462,19 +409,16 @@ class Consensus(object):
                     label.ratio = ratio
                     self.list_ratio.append(ratio)
             label.ratio = ratio
-        # self.total_labels += labels_count
+        self.total_labels += labels_count
         return consensus_count, labels_count
 
-    """
-        Reads the input file, computes the grouping and majority, and writes the
-        results to the output files.
-        Should be called after setting any optional parameters for the
-        ConsensusCalculator.
-    """
     def calculateConsensus(self):
-        # Set up input file reader
-
-        # csvInputFileReader = csv.DictReader(csvInputFile, dialect='excel')
+        """
+            Reads the input file, computes the grouping and majority, and writes the
+            results to the output files.
+            Should be called after setting any optional parameters for the
+            ConsensusCalculator.
+        """
 
         if not self.outputFolder:
             self.outputFolder = os.path.dirname(self.inputJson)
@@ -538,35 +482,47 @@ class Consensus(object):
                 seq = label.votes_sequence()
                 found = False
                 for t in seq:
+                    # build the proposition dict
                     if versions.get(t):
                         versions[t] += 1
                     else:
                         versions.setdefault(t, 1)
-                    if t == label.data["value"]:
+
+                    if t == label.data["value"]:  # test if it is valide consensus
+                        # sort by counts
                         lst = sorted(versions.items(), key=lambda x: x[1], reverse=True)
                         values = versions.values()
                         vl = 0
                         for v in values:
                             vl += v
-                        if lst[0][0] == label.data["value"]:
+                        if lst[0][0] == label.data["value"]:  # if it is majority
                             ratio = lst[0][1] / float(vl)
                             if vl > 1:
                                 if len(lst) > 1:
+                                    # if the second majority pass that ratio, not valide
                                     if lst[1][1] / float(vl) >= ratio:
                                         continue
                                     else:
-                                        list_ratio.append(ratio)  # consensus found
-                                        found = True
-                                        break
-                                list_ratio.append(ratio)
-                                found = True
-                                break
-
+                                        # if ratio is smaller, yes!
+                                        if ratio < label.ratio:
+                                            list_ratio.append(ratio)  # consensus found
+                                            found = True
+                                            break
+                                if ratio < label.ratio:
+                                    list_ratio.append(ratio)
+                                    found = True
+                                    break
+                # if cant not find the valide consensus, just make the same ratio
                 if not found and (label.data is not None) and label.data.get("value"):
                     list_ratio.append(label.ratio)
 
         def compare_chronology(l1, l2):
-
+            '''
+            To compare chronology and the original one
+            :param l1: original
+            :param l2: chronology
+            :return:
+            '''
             # self.list_ratio
             l1.sort()
             print(len(l1))
@@ -602,55 +558,67 @@ class Consensus(object):
                     count = 1
             s2 = sorted(set(l2))
 
-
-            xticks = []
-            xlabels = []
-            for i in range(1, len(list_consensus2)):
-                if list_consensus2[i - 1] - list_consensus2[i] >= 0.03:
-                    xticks.append(i - 1)
-                    xlabels.append(s2[i - 1])
+            def ticks_labels(lst_c, lst_r):
+                xticks = []
+                xlabels = []
+                for i in range(1, len(lst_c)):
+                    if lst_c[i - 1] - lst_c[i] >= 0.03:
+                        xticks.append(i - 1)
+                        xlabels.append(lst_r[i - 1])
+                xlabels = [round(x, 2) for x in xlabels]
+                return xticks, xlabels
 
             colors = [c for c in sns.color_palette("Set1", 2)]
-            fig, ax = plt.subplots()
-            rects1 = ax.bar(range(len(s1)), list_consensus1, color=colors[0], alpha=0.5)
-            rects2 = ax.bar(range(len(s2)), list_consensus2, color=colors[1], alpha=0.5)
-            auto_label(rects2, ax, xticks)
-            ax.set_xticks(xticks)
-            ax.set_xticklabels([round(x, 2) for x in xlabels])
-            ax.set_ylim(0, 1.1)
-            ax.set_xlabel("ratio")
-            ax.set_ylabel("%Consensus")
+            fig, ax = plt.subplots(2)
+            rects1 = ax[0].bar(range(len(s1)), list_consensus1, color=colors[0], alpha=0.5)
+            rects2 = ax[1].bar(range(len(s2)), list_consensus2, color=colors[1], alpha=0.5)
+
+            xticks1, xlabels1 = ticks_labels(list_consensus1, s1)
+            xticks2, xlabels2 = ticks_labels(list_consensus2, s2)
+
+            auto_label(rects1,ax[0],xticks1)
+            auto_label(rects2, ax[1], xticks2)
+
+            ax[0].set_xticks(xticks1)
+            ax[0].set_xticklabels(xlabels1)
+            ax[0].set_ylim(0, 1.1)
+            ax[0].set_xlabel("ratio")
+            ax[0].set_ylabel("%Consensus")
+
+            ax[1].set_xticks(xticks2)
+            ax[1].set_xticklabels(xlabels2)
+            ax[1].set_ylim(0, 1.1)
+            ax[1].set_xlabel("ratio")
+            ax[1].set_ylabel("%Consensus")
+
             diff = []
             dist = len(cmp_consensus1) - len(cmp_consensus2)
-            print(cmp_consensus2, "\n", cmp_consensus1)
+            # print(s1, "\n", s2)
             for i in range(len(cmp_consensus2)):
                 for k in range(len(cmp_consensus1)):
                     if s1[k] > s2[i]:
                         diff.append(sum(cmp_consensus2[:i]) - sum(cmp_consensus1[:k - 1]))
                         break
             diff = [round(d, 2) for d in diff]
-            # if dist > 0:
-            #     for i in range(len(cmp_consensus2)):
-            #         diff.append(sum(cmp_consensus2[:i]) - sum(cmp_consensus1[0:i]))
-            #     diff.extend([sum(cmp_consensus2) - sum(cmp_consensus1[:-dist + i]) for i in range(len(cmp_consensus1[-dist:]))])
-            # else:
-            #     for i in range(len(cmp_consensus1)):
-            #         diff.append(sum(cmp_consensus2[:i]) - sum(cmp_consensus1[0:i]))
-            #     diff.extend([sum(cmp_consensus2[:-dist + i]) - sum(cmp_consensus1) for i in range(len(cmp_consensus2[-dist:]))])
-            # print(cmp_consensus1, "\n", cmp_consensus2, "\n", diff)
-            ax2 = ax.twinx()
-            line, = ax2.plot(range(len(diff)), diff, color="#feb308", label="Difference")
-            ax2.set_ylabel("Diffrence of the count of consensus")
 
+            ax2 = ax[1].twinx()
+            line, = ax2.plot(range(len(diff)), diff, color="#feb308")
+            ax2.set_ylabel("Diffrence of the count of consensus")
+            ax2.set_xticks(xticks2)
+            ax2.set_xticklabels(xlabels2)
             # ax.set_ylim([0.2, 1.1])
             # plt.xlabel("Ratio")
             # plt.ylabel("%Consensus")
-            plt.legend([rects1, rects2, line], ["Original", "Chronology", "Difference"])
+            # plt.legend([rects1, rects2, line], ["Original", "Chronology", "Difference"])
             fig.tight_layout()
             plt.show()
         compare_chronology(self.list_ratio, list_ratio)
 
     def plot_seuil(self):
+        '''
+        polot each consensus ratio
+        :return:
+        '''
         def auto_label(rects, ax, xticks):
             # Get y-axis height to calculate label position from.
             (y_bottom, y_top) = ax.get_ylim()
@@ -712,6 +680,7 @@ class Consensus(object):
                             ha='center', va='bottom')
                     count += 1
                     continue
+                # plot 3 top votes
                 if count < 3 and label_position - (height - rect.get_height() + 400) > 400:
                     ax.text(rect.get_x() + rect.get_width() / 2., label_position,
                             '%d' % int(rect.get_height()),
@@ -726,7 +695,7 @@ class Consensus(object):
         propostions = list()  # each item is an array of dict{vk: #vk}
         for page in self.labels_by_page:
             for label in page["assertions"]:
-                if (label.versions is not None) and len(label.versions) > 1:  # calcule pas #proposition = 1
+                if (label.versions is not None) and len(label.versions) > 2:  # calcule pas #proposition = 1
                     v = label.totalvotes()
                     l = len(label.versions)
                     if l > len(propostions) + 1:
@@ -808,21 +777,19 @@ class Consensus(object):
                         str(list_consensus[i]) + "/" + str(height_list[i]),
                         ha='center', va='bottom', rotation="vertical")
 
-
-        # propostions: an array(#propo, list_of votes of labels)
+        # propositions: an array(#propo, list_of votes of labels)
         propostions = list()  # each item is an array of dict{vk: #vk}
         for page in self.labels_by_page:
             for label in page["assertions"]:
-                if (label.versions is not None) and len(label.versions) > 1:  # calcule pas #proposition = 1
+                if (label.freq_list is not None) and len(label.freq_list) > 1:  # calcule pas #proposition = 1
                     v = label.totalvotes()
                     if label.data.get("value") is None:
                         continue
-                    l = len(label.versions)
+                    l = len(label.freq_list)
                     if l > len(propostions) + 1:
                         for i in range(len(propostions), l):
                             propostions.append([])
                     propostions[l - 2].append((v, label.ratio))
-
         # p_votes: reduce votes for each proposition
         proposition_votes = []
         for p in propostions:
@@ -892,22 +859,100 @@ class Consensus(object):
                         label_list.append(label.id)
                         for version in label.versions:
                             for instance in version["instances"]:
-                                match = [x for x in worker_list if x == instance["user_id"]]
+                                match = [x for x in worker_list if x.id == instance["user_id"]]
                                 if len(match) > 0:  # user_id exists
                                     i = worker_list.index(match[0])
-                                    workers_labels[i][count] = label.normalized_versions[version["data"]["value"]]
+                                    if version["data"]["value"] != '':
+                                        workers_labels[i][count] = label.normalized_versions[version["data"]["value"]]
                                 else:  #user_id not found
-                                    workers_labels.append(np.zeros(self.total_labels))
-                                    workers_labels[-1][count] = label.normalized_versions[version["data"]["value"]]
-                                    worker_list.append(instance["user_id"])
+                                    workers_labels.append(np.zeros(self.total_labels, dtype=str))
+                                    if version["data"]["value"] != '':
+                                        workers_labels[-1][count] = label.normalized_versions[version["data"]["value"]]
+                                        user = User(instance['user_id'])
+                                        worker_list.append(user)
 
                         count += 1
         return np.array(workers_labels), np.array(worker_list), np.array(label_list)
 
-    def mv_results(self):
-        y = []
-        m = []
-
+    def compare_results(self):
+        count1 = 0
+        count2 = 0
+        for i in range(len(self.copy_labels)):
+            labels = self.copy_labels[i]["assertions"]
+            for j in range(len(labels)):
+                if labels[j].data is not None:
+                    if labels[j].data.get("value"):
+                        if labels[j].status == "complete":
+                            count1 += 1
+                        if self.labels_by_page[i]["assertions"][j].status == "completed":
+                            count2 += 1
+        return count1, count2
+        # def plot_proposition(plot_range):
+        #     def auto_label(rects, ax, list_consensus, height_list):
+        #         # Get y-axis height to calculate label position from.
+        #         (y_bottom, y_top) = ax.get_ylim()
+        #         # y_height = 60000  # y_top - y_bottom
+        #         for i, rect in enumerate(rects):
+        #             height = height_list[i]
+        #             label_position = height + 1  # (y_height * 0.07)
+        #             ax.text(rect.get_x() + rect.get_width() / 2., label_position,
+        #                     str(list_consensus[i]) + "/" + str(height_list[i]),
+        #                     ha='center', va='bottom', rotation="vertical")
+        #
+        #     # propostions: an array(#propo, list_of votes of labels)
+        #     propostions_ours = list()  # each item is an array of dict{vk: #vk}
+        #     for page in self.labels_by_page:
+        #         for label in page["assertions"]:
+        #             if (label.freq_list is not None) and len(label.freq_list) > 1:  # calcule pas #proposition = 1
+        #                 v = label.totalvotes()
+        #                 if label.data.get("value") is None:
+        #                     continue
+        #                 l = len(label.freq_list)
+        #                 if label.status == "completed":
+        #                     if l > len(propostions_ours) + 1:
+        #                         for i in range(len(propostions_ours), l):
+        #                             propostions_ours.append([])
+        #                     propostions_ours[l - 2].append(v)
+        #     # p_votes: reduce votes for each proposition
+        #     proposition_votes_ours = []
+        #     for p in propostions_ours:
+        #         previous = -1
+        #         p_with_dicts = {}
+        #         p.sort()
+        #         for v in p:
+        #             if v != previous:
+        #                 p_with_dicts.setdefault(str(v), 1)
+        #                 previous = v
+        #             else:
+        #                 p_with_dicts[str(previous)] += 1
+        #         proposition_votes_ours.append(p_with_dicts)
+        #
+        #     # start to plot
+        #     proposition_votes = [sorted(p.items(), key=lambda d: d[0]) for p in proposition_votes_ours]
+        #     colors = [c for c in sns.color_palette("Set2", 10)]
+        #     fig, ax = plt.subplots(len(plot_range))
+        #
+        #     for i in plot_range:
+        #         p = proposition_votes[i]
+        #         votes = [d[0] for d in p]
+        #         values = [d[1] for d in p]  # list of ratio
+        #
+        #         rects1 = ax[i].bar(votes, values, color="#f4320c", label="aaaa")
+        #         # rects2 = ax[i].bar(votes, values2, bottom=values1, color=colors[i - plot_range[0]])
+        #         ax[i].set_title("Proposotions " + str(i + 2))
+        #         xlim = [int(d) for d in votes]
+        #         ax[i].set_xticks(sorted(xlim))
+        #         ax[i].set_xticklabels(sorted(xlim))
+        #         ax[i].set_xlim(min(xlim), max(xlim) + 1)
+        #         # ax[i, j].set_legend([rects1, rects2], ["Consensus found", "Not found"])
+        #         # auto_label(rects1, ax[i], values1, [v1 + v2 for v1, v2 in zip(values1, values2)])
+        #
+        #     sns.set_style("whitegrid")
+        #     plt.ylabel("#Test")
+        #     plt.xlabel("#Votes")
+        #     fig.tight_layout()
+        #     plt.show()
+        # plot_proposition(range(5))
 
 def plot(ax, axes_x, axes_y, color="blue"):
     x = np.array(axes_x)
@@ -922,7 +967,7 @@ def find_seuil1(start, end, scan):
     percentage_consensus = []
     seuil = []
     for s in np.arange(start, end, scan):
-        getConsensus = Consensus('dataset.json', 3)
+        getConsensus = MajorityVoting('dataset.json', 3)
         getConsensus.setOutputFolder('resTotal_' + str(s))
         getConsensus.set_seuil(s)
         pc = getConsensus.calculateConsensus()
@@ -956,15 +1001,17 @@ def combine_json(dit):
 
 def main():
     # combine_json("emigrant/")
-    getConsensus = Consensus('dataset.json', 3)
+    getConsensus = MajorityVoting('dataset.json', 3)
     getConsensus.setOutputFolder('test_refine_seuil')
+    getConsensus.set_seuil(0.75)
     getConsensus.calculateConsensus()
-    # getConsensus.plot_seuil()
-    # getConsensus.chronology()
-    # getConsensus.plot_propositions()
-    getConsensus.plot_proposition(0.75, range(5))
+    # getConsensus.compare_results()
+    getConsensus.plot_seuil()
+    getConsensus.chronology()
+    getConsensus.plot_propositions()
+    getConsensus.plot_proposition(0.6, range(5))
     # find_seuil1(0, 1.1, .1)
-
+    # getConsensus.get_workers_contributions()
 
 if __name__ == "__main__":
     main()
